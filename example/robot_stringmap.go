@@ -5,9 +5,10 @@ import "errors"
 
 func ToRobot(s string) (robot, error) {
 	m := map[string]robot{
-		"R2D2":         robot_R2D2,
-		"C3P0":         robot_C3P0,
-		"BigSlowRobot": robot_BigSlowRobot,
+		"Chicken": robot_Chicken,
+		"Cow":     robotCow,
+		"R2D2":    robot_R2D2,
+		"C3P0":    robot_C3P0,
 	}
 	v, ok := m[s]
 	if !ok {

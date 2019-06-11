@@ -109,7 +109,7 @@ func getPrefixedNames(src []byte, prefix string) ([]string, error) {
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))
-	s.Init(file, src, nil, scanner.ScanComments)
+	s.Init(file, src, nil, 0)
 
 	constStmt := false
 	inParen := false

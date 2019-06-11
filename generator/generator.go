@@ -2,8 +2,7 @@ package generator
 
 import (
 	"bytes"
-	"go/ast"
-	"go/parser"
+	"go/scanner"
 	"go/token"
 	"io/ioutil"
 	"path"
@@ -37,11 +36,11 @@ func Generate(typeName, dir, filename string) error {
 		return err
 	}
 
-	fileBytes, err := ioutil.ReadFile(path.Join(dir, filename))
+	src, err := ioutil.ReadFile(path.Join(dir, filename))
 	if err != nil {
 		return err
 	}
-	constNames, err := getPrefixedNames(string(fileBytes), typeName)
+	constNames, err := getPrefixedNames(src, typeName)
 	if err != nil {
 		return err
 	}
@@ -106,49 +105,58 @@ func generateFileBytes(filename string, data templateData) ([]byte, error) {
 	return src, nil
 }
 
-func getPrefixedNames(file string, prefix string) ([]string, error) {
-	f, err := parseFile(file)
-	if err != nil {
-		return nil, err
-	}
-
-	a := getNames(f)
-	var res []string
-
-	for _, s := range a {
-		if s == prefix {
-			continue
-		}
-
-		if strings.HasPrefix(s, prefix) {
-			res = append(res, s)
-		}
-	}
-
-	return res, nil
-}
-
-func parseFile(file string) (*ast.File, error) {
+func getPrefixedNames(src []byte, prefix string) ([]string, error) {
+	var s scanner.Scanner
 	fset := token.NewFileSet()
-	return parser.ParseFile(fset, "stringmap.go", file, 0)
-}
+	file := fset.AddFile("", fset.Base(), len(src))
+	s.Init(file, src, nil, scanner.ScanComments)
 
-func getNames(f ast.Node) []string {
+	constStmt := false
+	inParen := false
+	global := true
 	var names []string
-
-	ast.Inspect(f, func(n ast.Node) bool {
-		var s string
-		switch x := n.(type) {
-		case *ast.Ident:
-			s = x.Name
+	for {
+		pos, tok, lit := s.Scan()
+		if s.ErrorCount > 0 {
+			return nil, errors.Errorf("invalid go file given: invalid token found at %v", pos)
 		}
-		if s != "" {
-			names = append(names, s)
-		}
-		return true
-	})
 
-	return names
+		if tok == token.EOF {
+			break
+		}
+
+		switch tok {
+		case token.CONST:
+			if global {
+				constStmt = true
+			}
+		case token.LPAREN:
+			if constStmt {
+				inParen = true
+			}
+		case token.RPAREN:
+			if constStmt && inParen {
+				constStmt = false
+				inParen = false
+			}
+		case token.IDENT:
+			if constStmt {
+				if strings.HasPrefix(lit, prefix) {
+					names = append(names, lit)
+				}
+				if !inParen {
+					constStmt = false
+				}
+			}
+		case token.FUNC:
+			global = false
+		case token.RBRACE:
+			if !global {
+				global = true
+			}
+		}
+	}
+	return names, nil
 }
 
 func getItemsFromNames(names []string, prefix string) []Item {
